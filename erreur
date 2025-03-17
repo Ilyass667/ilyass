@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 4, in <module>
+    import Freenove_DHT as DHT11  # Module pour le capteur
+  File "/home/pi/Downloads/ilyass-main/PythonProject/Freenove_DHT.py", line 12, in <module>
+    lib = ctypes.CDLL(lib_name)
+  File "/usr/lib/python3.11/ctypes/__init__.py", line 376, in __init__
+    self._handle = _dlopen(self._name, mode)
+OSError: /usr/lib/libdht.so: cannot open shared object file: No such file or directory
+>>> 
