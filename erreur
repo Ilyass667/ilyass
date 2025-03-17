@@ -1,36 +1,138 @@
-#!/usr/bin/env python3
-#############################################################################
-# Filename    : DHT11.py
-# Description :	read the temperature and humidity data of DHT11
-# Author      : freenove
-# modification: 2024/07/29
-########################################################################
+import tkinter as tk
 import time
-from Freenove_DHT import DHT      
+import threading
+from Freenove_DHT import DHT  # Module pour le capteur DHT11
 
-DHTPin = 17     #define the pin of DHT11
+# Variables globales
+temp_value = 24.0  # Température par défaut
+current_humidity = 0.0  # Humidité mesurée
+door = "Fermé"
+mode = "Désactivé"
+mode_value = "disabled"
 
-def loop():
-    dht = DHT(DHTPin)
-    time.sleep(1) 
-    counts = 0     # Measurement counts
-    while(True):
-        counts += 1
-        print("Measurement counts: ", counts)
-        for i in range(0,15):            
-            chk = dht.readDHT11()     #read DHT11 and get a return value. Then determine whether data read is normal according to the return value.
-            if (chk == 0):      #read DHT11 and get a return value. Then determine whether data read is normal according to the return value.
-                print("DHT11,OK!")
-                break
-            time.sleep(0.1)
-           
-        print("Humidity : %.2f, \t Temperature : %.2f \n"%(dht.getHumidity(),dht.getTemperature()))
-        time.sleep(2)   
-        
-if __name__ == '__main__':
-    print ('Program is starting ... ')
+# Configuration du capteur DHT11
+DHTPin = 17  # GPIO 17
+dht = DHT(DHTPin)
+
+# Fonction pour changer le mode
+def change_mode():
+    global mode, mode_value
+    if mode == "Désactivé":
+        mode = "Activé"
+        mode_value = "normal"
+    else:
+        mode = "Désactivé"
+        mode_value = "disabled"
+    test_mode.configure(text=f"Mode test : {mode}")
+    change_state()
+
+# Fonction pour changer l'état des boutons
+def change_state():
+    plus_btn.configure(state=mode_value)
+    minus_btn.configure(state=mode_value)
+    open_btn.configure(state=mode_value)
+    close_btn.configure(state=mode_value)
+    start_btn.configure(state=mode_value)
+    end_btn.configure(state=mode_value)
+
+# Fonction pour augmenter la température
+def plus_temp():
+    global temp_value
+    temp_value += 1
+    update_display()
+
+# Fonction pour diminuer la température
+def minus_temp():
+    global temp_value
+    temp_value -= 1
+    update_display()
+
+# Fonction pour mettre à jour l'affichage
+def update_display():
+    temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+# Fonction pour lire les données du capteur DHT11
+def read_temp_loop():
+    def loop():
+        global temp_value, current_humidity
+        while True:
+            for _ in range(15):  # Réessayer jusqu'à 15 fois en cas d'erreur
+                chk = dht.readDHT11()  # Lire les données du capteur
+                if chk == 0:  # DHTLIB_OK = 0 (succès)
+                    current_humidity = dht.getHumidity()
+                    temp_value = dht.getTemperature()
+                    window.after(0, update_display)  # Mettre à jour l'interface
+                    break  # Sortir de la boucle si la lecture est réussie
+                else:
+                    print("Erreur capteur DHT11, code:", chk)
+                time.sleep(0.1)  # Attendre 0,1 seconde avant de réessayer
+            time.sleep(2)  # Attendre 2 secondes avant la prochaine lecture
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+
+# Interface graphique
+window = tk.Tk()
+window.geometry('400x450')
+
+title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
+
+temp = tk.Label(window, text="Température:")
+temp2 = tk.Label(window, text="Température:")
+
+temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
+
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+
+test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", pady=10, font=("Arial", 10, "bold"))
+
+mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
+
+frame1 = tk.Frame(window)
+plus_btn = tk.Button(frame1, text="+", command=plus_temp, background="lightgreen", padx=8, pady=5, state=tk.DISABLED)
+minus_btn = tk.Button(frame1, text="-", command=minus_temp, background="red", padx=8, pady=5, state=tk.DISABLED)
+
+door_text = tk.Label(window, text="Trappe :")
+frame2 = tk.Frame(window)
+open_btn = tk.Button(frame2, text="Ouvrir", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
+close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="red", pady=5, state=tk.DISABLED)
+
+alarm_text = tk.Label(window, text="Alarme :")
+frame3 = tk.Frame(window)
+start_btn = tk.Button(frame3, text="Activer", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arreter", command=change_mode, background="red", pady=5, state="disabled")
+
+title.pack()
+temp.pack()
+temp_value_label.pack()
+door_status.pack()
+test_mode.pack()
+mode_btn.pack(pady=10)
+temp2.pack()
+frame1.pack(pady=5)
+plus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+minus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+door_text.pack()
+frame2.pack(pady=5)
+open_btn.pack(side=tk.LEFT, padx=5, pady=5)
+close_btn.pack(side=tk.LEFT, padx=5, pady=5)
+alarm_text.pack()
+frame3.pack(pady=5)
+start_btn.pack(side=tk.LEFT, padx=5, pady=5)
+end_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+# Démarrer la lecture du capteur
+read_temp_loop()
+
+# Fonction pour nettoyer le GPIO à la fermeture
+def on_close():
+    print("Nettoyage GPIO...")
     try:
-        loop()
-    except KeyboardInterrupt:
+        import RPi.GPIO as GPIO
+        GPIO.cleanup()
+    except:
         pass
-        exit()   
+    window.destroy()
+
+window.protocol("WM_DELETE_WINDOW", on_close)
+window.mainloop()
