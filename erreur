@@ -1,9 +1,156 @@
-Traceback (most recent call last):
-  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 4, in <module>
-    import Freenove_DHT as DHT11  # Module pour le capteur
-  File "/home/pi/Downloads/ilyass-main/PythonProject/Freenove_DHT.py", line 12, in <module>
-    lib = ctypes.CDLL(lib_name)
-  File "/usr/lib/python3.11/ctypes/__init__.py", line 376, in __init__
-    self._handle = _dlopen(self._name, mode)
-OSError: /usr/lib/libdht.so: cannot open shared object file: No such file or directory
->>> 
+import tkinter as tk
+
+# --- MODIF DEBUT ---
+import RPi.GPIO as GPIO
+import time
+import threading
+import Freenove_DHT as DHT  # Module Freenove pour le DHT11
+# --- MODIF FIN ---
+
+# --- MODIF DEBUT ---
+# Définir la broche du capteur selon l'exemple Freenove
+DHTPin = 11  
+# Variables globales pour stocker la température et l'humidité lues
+current_temp = 0.0
+current_humidity = 0.0
+# --- MODIF FIN ---
+
+door = "Fermé"
+mode = "Désactivé"
+mode_value = "disabled"
+
+def change_mode():
+    global mode, mode_value
+    if mode == "Désactivé":
+        mode = "Activé"
+        mode_value = "normal"
+    else:
+        mode = "Désactivé"
+        mode_value = "disabled"
+    test_mode.configure(text=f"Mode test : {mode}")
+    change_state()
+
+def change_state():
+    plus_btn.configure(state=mode_value)
+    minus_btn.configure(state=mode_value)
+    open_btn.configure(state=mode_value)
+    close_btn.configure(state=mode_value)
+    start_btn.configure(state=mode_value)
+    end_btn.configure(state=mode_value)
+
+def plus_temp():
+    # --- MODIF DEBUT ---
+    # Pour le mode test : incrémente la température "virtuelle"
+    global current_temp
+    current_temp += 1
+    update_temperature_label()
+    # --- MODIF FIN ---
+
+def minus_temp():
+    # --- MODIF DEBUT ---
+    # Pour le mode test : décrémente la température "virtuelle"
+    global current_temp
+    current_temp -= 1
+    update_temperature_label()
+    # --- MODIF FIN ---
+
+# --- MODIF DEBUT ---
+def read_sensor_loop():
+    """
+    Cette fonction crée un objet DHT et lit le capteur DHT11 en suivant la logique de l'exemple Freenove.
+    Elle met à jour les variables globales current_temp et current_humidity,
+    puis demande la mise à jour de l'interface.
+    """
+    dht = DHT.DHT(DHTPin)  # Création de l'objet DHT avec la broche définie
+    counts = 0  # Nombre de mesures effectuées
+    while True:
+        counts += 1
+        print("Measurement counts: ", counts)
+        # Tentative de lecture du capteur jusqu'à 15 fois
+        for i in range(15):
+            chk = dht.readDHT11()
+            if chk is dht.DHTLIB_OK:
+                print("DHT11, OK!")
+                break
+            time.sleep(0.1)
+        global current_temp, current_humidity
+        current_temp = dht.temperature
+        current_humidity = dht.humidity
+        # Mise à jour de l'affichage dans l'interface
+        window.after(0, update_temperature_label)
+        time.sleep(2)  # Attendre 2 secondes avant la prochaine lecture
+
+def update_temperature_label():
+    # --- MODIF FIN ---
+    # Met à jour le label affichant la température (et l'humidité)
+    temp_value_label.config(text=f"{current_temp:.2f} °C   (H:{current_humidity:.2f}%)")
+# --- MODIF FIN ---
+
+window = tk.Tk()
+window.geometry('400x450')
+
+title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
+
+temp = tk.Label(window, text="Température:")
+temp2 = tk.Label(window, text="Température:")
+
+# --- MODIF DEBUT ---
+# Label d'affichage de la température
+temp_value_label = tk.Label(window, text="0.0", fg="red")
+# --- MODIF FIN ---
+
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+
+test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", pady=10, font=("Arial", 10, "bold"))
+
+mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
+
+frame1 = tk.Frame(window)
+# --- MODIF DEBUT ---
+plus_btn = tk.Button(frame1, text="+", command=plus_temp, background="lightgreen", padx=8, pady=5, state=tk.DISABLED)
+minus_btn = tk.Button(frame1, text="-", command=minus_temp, background="red", padx=8, pady=5, state=tk.DISABLED)
+# --- MODIF FIN ---
+
+door_text = tk.Label(window, text="Trappe :")
+frame2 = tk.Frame(window)
+open_btn = tk.Button(frame2, text="Ouvrir", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
+close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="red", pady=5, state=tk.DISABLED)
+
+alarm_text = tk.Label(window, text="Alarme :")
+frame3 = tk.Frame(window)
+start_btn = tk.Button(frame3, text="Activer", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arreter", command=change_mode, background="red", pady=5, state="disabled")
+
+title.pack()
+temp.pack()
+# --- MODIF DEBUT ---
+temp_value_label.pack()  # Affichage de la température lue
+# --- MODIF FIN ---
+door_status.pack()
+test_mode.pack()
+mode_btn.pack(pady=10)
+temp2.pack()
+frame1.pack(pady=5)
+plus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+minus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+door_text.pack()
+frame2.pack(pady=5)
+open_btn.pack(side=tk.LEFT, padx=5, pady=5)
+close_btn.pack(side=tk.LEFT, padx=5, pady=5)
+alarm_text.pack()
+frame3.pack(pady=5)
+start_btn.pack(side=tk.LEFT, padx=5, pady=5)
+end_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+# --- MODIF DEBUT ---
+# Lancement de la lecture du capteur dans un thread séparé
+sensor_thread = threading.Thread(target=read_sensor_loop, daemon=True)
+sensor_thread.start()
+# --- MODIF FIN ---
+
+def on_closing():
+    GPIO.cleanup()
+    window.destroy()
+
+window.protocol("WM_DELETE_WINDOW", on_closing)
+window.mainloop()
