@@ -2,6 +2,7 @@ import tkinter as tk
 import time
 import threading
 from Freenove_DHT import DHT  # Module pour le capteur DHT11
+import RPi.GPIO as GPIO  # Bibliothèque pour contrôler les GPIO
 
 # Variables globales
 temp_value = 24.0  # Température par défaut
@@ -13,6 +14,17 @@ mode_value = "disabled"
 # Configuration du capteur DHT11
 DHTPin = 17  # GPIO 17
 dht = DHT(DHTPin)
+
+# Configuration du buzzer actif
+BUZZER_PIN = 27  # GPIO 27
+GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
+GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
+
+# Fonction pour tester le buzzer
+def test_buzzer():
+    GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Allumer le buzzer
+    time.sleep(0.5)  # Attendre 0,5 seconde
+    GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
 
 # Fonction pour changer le mode
 def change_mode():
@@ -121,17 +133,16 @@ frame3.pack(pady=5)
 start_btn.pack(side=tk.LEFT, padx=5, pady=5)
 end_btn.pack(side=tk.LEFT, padx=5, pady=5)
 
+# Tester le buzzer au démarrage
+test_buzzer()
+
 # Démarrer la lecture du capteur
 read_temp_loop()
 
 # Fonction pour nettoyer le GPIO à la fermeture
 def on_close():
     print("Nettoyage GPIO...")
-    try:
-        import RPi.GPIO as GPIO
-        GPIO.cleanup()
-    except:
-        pass
+    GPIO.cleanup()  # Nettoyer les GPIO
     window.destroy()
 
 window.protocol("WM_DELETE_WINDOW", on_close)
