@@ -10,6 +10,7 @@ current_humidity = 0.0  # Humidité mesurée
 door = "Fermé"
 mode = "Désactivé"
 mode_value = "disabled"
+alarm_active = False  # État de l'alarme
 
 # Configuration du capteur DHT11
 DHTPin = 17  # GPIO 17
@@ -19,12 +20,21 @@ dht = DHT(DHTPin)
 BUZZER_PIN = 27  # GPIO 27
 GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
 GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
+GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer au démarrage
 
-# Fonction pour tester le buzzer
-def test_buzzer():
-    GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Allumer le buzzer
-    time.sleep(0.5)  # Attendre 0,5 seconde
-    GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
+# Fonction pour activer/désactiver l'alarme
+def control_alarm():
+    global alarm_active
+    while True:
+        if temp_value >= 26.0 and not alarm_active:  # Température >= 26°C et alarme inactive
+            GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+            alarm_active = True
+            print("Alarme activée ! Température trop élevée.")
+        elif temp_value < 26.0 and alarm_active:  # Température < 26°C et alarme active
+            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+            alarm_active = False
+            print("Alarme désactivée. Température normale.")
+        time.sleep(1)  # Vérifier toutes les secondes
 
 # Fonction pour changer le mode
 def change_mode():
@@ -133,15 +143,17 @@ frame3.pack(pady=5)
 start_btn.pack(side=tk.LEFT, padx=5, pady=5)
 end_btn.pack(side=tk.LEFT, padx=5, pady=5)
 
-# Tester le buzzer au démarrage
-test_buzzer()
-
 # Démarrer la lecture du capteur
 read_temp_loop()
+
+# Démarrer le contrôle de l'alarme
+alarm_thread = threading.Thread(target=control_alarm, daemon=True)
+alarm_thread.start()
 
 # Fonction pour nettoyer le GPIO à la fermeture
 def on_close():
     print("Nettoyage GPIO...")
+    GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
     GPIO.cleanup()  # Nettoyer les GPIO
     window.destroy()
 
