@@ -16,22 +16,27 @@ alarm_active = False  # État de l'alarme
 DHTPin = 17  # GPIO 17
 dht = DHT(DHTPin)
 
-# Configuration du buzzer actif
+# Configuration du buzzer actif et de la LED
 BUZZER_PIN = 27  # GPIO 27
+LED_PIN = 13  # GPIO 13
 GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
 GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
+GPIO.setup(LED_PIN, GPIO.OUT)  # Configurer la LED en sortie
 GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer au démarrage
+GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 
-# Fonction pour activer/désactiver l'alarme
+# Fonction pour activer/désactiver l'alarme (buzzer et LED)
 def control_alarm():
     global alarm_active
     while True:
         if temp_value >= 26.0 and not alarm_active:  # Température >= 26°C et alarme inactive
             GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+            GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
             alarm_active = True
             print("Alarme activée ! Température trop élevée.")
         elif temp_value < 26.0 and alarm_active:  # Température < 26°C et alarme active
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
             alarm_active = False
             print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
@@ -154,6 +159,7 @@ alarm_thread.start()
 def on_close():
     print("Nettoyage GPIO...")
     GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
+    GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
     GPIO.cleanup()  # Nettoyer les GPIO
     window.destroy()
 
