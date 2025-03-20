@@ -1,9 +1,187 @@
-xception in Tkinter callback
-Traceback (most recent call last):
-  File "/usr/lib/python3.11/tkinter/__init__.py", line 1948, in __call__
-    return self.func(*args)
-           ^^^^^^^^^^^^^^^^
-  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 135, in <lambda>
-    start_btn = tk.Button(frame3, text="Activer", command=lambda: control_alarm_manual(True), background="lightgreen", pady=5, state=tk.DISABLED)
-                                                                  ^^^^^^^^^^^^^^^^^^^^
-NameError: name 'control_alarm_manual' is not defined
+import tkinter as tk
+import time
+import threading
+from Freenove_DHT import DHT  # Module pour le capteur DHT11
+import RPi.GPIO as GPIO  # Bibliothèque pour contrôler les GPIO
+
+# Variables globales
+temp_value = 24.0  # Température par défaut
+current_humidity = 0.0  # Humidité mesurée
+door = "Fermé"
+mode = "Désactivé"
+mode_value = "disabled"
+alarm_active = False  # État de l'alarme
+test_mode_active = False  # État du mode Test
+
+# Configuration du capteur DHT11
+DHTPin = 17  # GPIO 17
+dht = DHT(DHTPin)
+
+# Configuration du buzzer actif et de la LED
+BUZZER_PIN = 27  # GPIO 27
+LED_PIN = 13  # GPIO 13
+GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
+GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
+GPIO.setup(LED_PIN, GPIO.OUT)  # Configurer la LED en sortie
+GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer au démarrage
+GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
+
+# Fonction pour activer/désactiver l'alarme (buzzer et LED)
+def control_alarm():
+    global alarm_active
+    while True:
+        if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
+            GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+            GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+            alarm_active = True
+            print("Alarme activée ! Température trop élevée.")
+        elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
+            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+            alarm_active = False
+            print("Alarme désactivée. Température normale.")
+        time.sleep(1)  # Vérifier toutes les secondes
+
+# Fonction pour activer/désactiver manuellement l'alarme
+def control_alarm_manual(activate):
+    global alarm_active
+    if activate:
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+        GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+        alarm_active = True
+        print("Alarme activée manuellement.")
+    else:
+        GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+        GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+        alarm_active = False
+        print("Alarme désactivée manuellement.")
+
+# Fonction pour changer le mode
+def change_mode():
+    global mode, mode_value, test_mode_active
+    if mode == "Désactivé":
+        mode = "Activé"
+        mode_value = "normal"
+        test_mode_active = True  # Activer le mode Test
+    else:
+        mode = "Désactivé"
+        mode_value = "disabled"
+        test_mode_active = False  # Désactiver le mode Test
+    test_mode.configure(text=f"Mode test : {mode}")
+    change_state()
+
+# Fonction pour changer l'état des boutons
+def change_state():
+    plus_btn.configure(state=mode_value)
+    minus_btn.configure(state=mode_value)
+    open_btn.configure(state=mode_value)
+    close_btn.configure(state=mode_value)
+    start_btn.configure(state=mode_value)
+    end_btn.configure(state=mode_value)
+
+# Fonction pour augmenter la température
+def plus_temp():
+    global temp_value
+    if test_mode_active:  # En mode Test, on modifie la température manuellement
+        temp_value += 1
+        update_display()
+
+# Fonction pour diminuer la température
+def minus_temp():
+    global temp_value
+    if test_mode_active:  # En mode Test, on modifie la température manuellement
+        temp_value -= 1
+        update_display()
+
+# Fonction pour mettre à jour l'affichage
+def update_display():
+    temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+# Fonction pour lire les données du capteur DHT11
+def read_temp_loop():
+    def loop():
+        global temp_value, current_humidity
+        while True:
+            if not test_mode_active:  # En mode normal, on lit le capteur DHT11
+                for _ in range(15):  # Réessayer jusqu'à 15 fois en cas d'erreur
+                    chk = dht.readDHT11()  # Lire les données du capteur
+                    if chk == 0:  # DHTLIB_OK = 0 (succès)
+                        current_humidity = dht.getHumidity()
+                        temp_value = dht.getTemperature()
+                        window.after(0, update_display)  # Mettre à jour l'interface
+                        break  # Sortir de la boucle si la lecture est réussie
+                    else:
+                        print("Erreur capteur DHT11, code:", chk)
+                    time.sleep(0.1)  # Attendre 0,1 seconde avant de réessayer
+            time.sleep(2)  # Attendre 2 secondes avant la prochaine lecture
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+
+# Interface graphique
+window = tk.Tk()
+window.geometry('400x450')
+
+title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
+
+temp = tk.Label(window, text="Température:")
+temp2 = tk.Label(window, text="Température:")
+
+temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
+
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+
+test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", pady=10, font=("Arial", 10, "bold"))
+
+mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
+
+frame1 = tk.Frame(window)
+plus_btn = tk.Button(frame1, text="+", command=plus_temp, background="lightgreen", padx=8, pady=5, state=tk.DISABLED)
+minus_btn = tk.Button(frame1, text="-", command=minus_temp, background="red", padx=8, pady=5, state=tk.DISABLED)
+
+door_text = tk.Label(window, text="Trappe :")
+frame2 = tk.Frame(window)
+open_btn = tk.Button(frame2, text="Ouvrir", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
+close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="red", pady=5, state=tk.DISABLED)
+
+alarm_text = tk.Label(window, text="Alarme :")
+frame3 = tk.Frame(window)
+start_btn = tk.Button(frame3, text="Activer", command=lambda: control_alarm_manual(True), background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arreter", command=lambda: control_alarm_manual(False), background="red", pady=5, state="disabled")
+
+title.pack()
+temp.pack()
+temp_value_label.pack()
+door_status.pack()
+test_mode.pack()
+mode_btn.pack(pady=10)
+temp2.pack()
+frame1.pack(pady=5)
+plus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+minus_btn.pack(side=tk.LEFT, padx=5, pady=5)
+door_text.pack()
+frame2.pack(pady=5)
+open_btn.pack(side=tk.LEFT, padx=5, pady=5)
+close_btn.pack(side=tk.LEFT, padx=5, pady=5)
+alarm_text.pack()
+frame3.pack(pady=5)
+start_btn.pack(side=tk.LEFT, padx=5, pady=5)
+end_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
+# Démarrer la lecture du capteur
+read_temp_loop()
+
+# Démarrer le contrôle de l'alarme
+alarm_thread = threading.Thread(target=control_alarm, daemon=True)
+alarm_thread.start()
+
+# Fonction pour nettoyer le GPIO à la fermeture
+def on_close():
+    print("Nettoyage GPIO...")
+    GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
+    GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+    GPIO.cleanup()  # Nettoyer les GPIO
+    window.destroy()
+
+window.protocol("WM_DELETE_WINDOW", on_close)
+window.mainloop()
