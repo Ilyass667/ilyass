@@ -29,12 +29,12 @@ GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 def control_alarm():
     global alarm_active
     while True:
-        if temp_value >= 26.0 and not alarm_active:  # Température >= 26°C et alarme inactive
+        if temp_value >= 27.0 and not alarm_active:  # Température >= 26°C et alarme inactive
             GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
             GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
             alarm_active = True
             print("Alarme activée ! Température trop élevée.")
-        elif temp_value < 26.0 and alarm_active:  # Température < 26°C et alarme active
+        elif temp_value < 27.0 and alarm_active:  # Température < 26°C et alarme active
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
             GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
             alarm_active = False
