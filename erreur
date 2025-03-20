@@ -62,7 +62,7 @@ def control_alarm_manual(activate):
 
 # Fonction pour changer le mode
 def change_mode():
-    global mode, mode_value, test_mode_active
+    global mode, mode_value, test_mode_active, alarm_active, manual_alarm_override
     if mode == "Désactivé":
         mode = "Activé"
         mode_value = "normal"
@@ -71,6 +71,13 @@ def change_mode():
         mode = "Désactivé"
         mode_value = "disabled"
         test_mode_active = False  # Désactiver le mode Test
+        # Désactiver l'alarme en quittant le mode Test
+        if alarm_active:
+            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+            alarm_active = False
+            manual_alarm_override = False  # Réinitialiser le mode manuel
+            print("Alarme désactivée en quittant le mode Test.")
     test_mode.configure(text=f"Mode test : {mode}")
     change_state()
 
