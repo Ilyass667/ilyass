@@ -30,36 +30,17 @@ GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 def control_alarm():
     global alarm_active
     while True:
-        if not test_mode_active:  # En mode normal, l'alarme est automatique
-            if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
-                GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
-                GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-                alarm_active = True
-                print("Alarme activée ! Température trop élevée.")
-            elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
-                GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
-                GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-                alarm_active = False
-                print("Alarme désactivée. Température normale.")
+        if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
+            GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+            GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+            alarm_active = True
+            print("Alarme activée ! Température trop élevée.")
+        elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
+            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+            alarm_active = False
+            print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
-
-# Fonction pour activer manuellement l'alarme
-def activate_alarm():
-    global alarm_active
-    if not alarm_active:
-        GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
-        GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-        alarm_active = True
-        print("Alarme activée manuellement.")
-
-# Fonction pour désactiver manuellement l'alarme
-def deactivate_alarm():
-    global alarm_active
-    if alarm_active:
-        GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
-        GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-        alarm_active = False
-        print("Alarme désactivée manuellement.")
 
 # Fonction pour changer le mode
 def change_mode():
@@ -151,8 +132,8 @@ close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="re
 
 alarm_text = tk.Label(window, text="Alarme :")
 frame3 = tk.Frame(window)
-start_btn = tk.Button(frame3, text="Activer", command=activate_alarm, background="lightgreen", pady=5, state=tk.DISABLED)
-end_btn = tk.Button(frame3, text="Arreter", command=deactivate_alarm, background="red", pady=5, state="disabled")
+start_btn = tk.Button(frame3, text="Activer", command=lambda: control_alarm_manual(True), background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arreter", command=lambda: control_alarm_manual(False), background="red", pady=5, state="disabled")
 
 title.pack()
 temp.pack()
