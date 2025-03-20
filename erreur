@@ -11,6 +11,7 @@ door = "Fermé"
 mode = "Désactivé"
 mode_value = "disabled"
 alarm_active = False  # État de l'alarme
+test_mode_active = False  # État du mode Test
 
 # Configuration du capteur DHT11
 DHTPin = 17  # GPIO 17
@@ -29,27 +30,48 @@ GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 def control_alarm():
     global alarm_active
     while True:
-        if temp_value >= 27.0 and not alarm_active:  # Température >= 26°C et alarme inactive
-            GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
-            GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-            alarm_active = True
-            print("Alarme activée ! Température trop élevée.")
-        elif temp_value < 27.0 and alarm_active:  # Température < 26°C et alarme active
-            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
-            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-            alarm_active = False
-            print("Alarme désactivée. Température normale.")
+        if not test_mode_active:  # En mode normal, l'alarme est automatique
+            if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
+                GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+                GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+                alarm_active = True
+                print("Alarme activée ! Température trop élevée.")
+            elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
+                GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+                GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+                alarm_active = False
+                print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
+
+# Fonction pour activer manuellement l'alarme
+def activate_alarm():
+    global alarm_active
+    if not alarm_active:
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+        GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+        alarm_active = True
+        print("Alarme activée manuellement.")
+
+# Fonction pour désactiver manuellement l'alarme
+def deactivate_alarm():
+    global alarm_active
+    if alarm_active:
+        GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+        GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+        alarm_active = False
+        print("Alarme désactivée manuellement.")
 
 # Fonction pour changer le mode
 def change_mode():
-    global mode, mode_value
+    global mode, mode_value, test_mode_active
     if mode == "Désactivé":
         mode = "Activé"
         mode_value = "normal"
+        test_mode_active = True  # Activer le mode Test
     else:
         mode = "Désactivé"
         mode_value = "disabled"
+        test_mode_active = False  # Désactiver le mode Test
     test_mode.configure(text=f"Mode test : {mode}")
     change_state()
 
@@ -65,14 +87,16 @@ def change_state():
 # Fonction pour augmenter la température
 def plus_temp():
     global temp_value
-    temp_value += 1
-    update_display()
+    if test_mode_active:  # En mode Test, on modifie la température manuellement
+        temp_value += 1
+        update_display()
 
 # Fonction pour diminuer la température
 def minus_temp():
     global temp_value
-    temp_value -= 1
-    update_display()
+    if test_mode_active:  # En mode Test, on modifie la température manuellement
+        temp_value -= 1
+        update_display()
 
 # Fonction pour mettre à jour l'affichage
 def update_display():
@@ -83,16 +107,17 @@ def read_temp_loop():
     def loop():
         global temp_value, current_humidity
         while True:
-            for _ in range(15):  # Réessayer jusqu'à 15 fois en cas d'erreur
-                chk = dht.readDHT11()  # Lire les données du capteur
-                if chk == 0:  # DHTLIB_OK = 0 (succès)
-                    current_humidity = dht.getHumidity()
-                    temp_value = dht.getTemperature()
-                    window.after(0, update_display)  # Mettre à jour l'interface
-                    break  # Sortir de la boucle si la lecture est réussie
-                else:
-                    print("Erreur capteur DHT11, code:", chk)
-                time.sleep(0.1)  # Attendre 0,1 seconde avant de réessayer
+            if not test_mode_active:  # En mode normal, on lit le capteur DHT11
+                for _ in range(15):  # Réessayer jusqu'à 15 fois en cas d'erreur
+                    chk = dht.readDHT11()  # Lire les données du capteur
+                    if chk == 0:  # DHTLIB_OK = 0 (succès)
+                        current_humidity = dht.getHumidity()
+                        temp_value = dht.getTemperature()
+                        window.after(0, update_display)  # Mettre à jour l'interface
+                        break  # Sortir de la boucle si la lecture est réussie
+                    else:
+                        print("Erreur capteur DHT11, code:", chk)
+                    time.sleep(0.1)  # Attendre 0,1 seconde avant de réessayer
             time.sleep(2)  # Attendre 2 secondes avant la prochaine lecture
 
     t = threading.Thread(target=loop, daemon=True)
@@ -126,8 +151,8 @@ close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="re
 
 alarm_text = tk.Label(window, text="Alarme :")
 frame3 = tk.Frame(window)
-start_btn = tk.Button(frame3, text="Activer", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
-end_btn = tk.Button(frame3, text="Arreter", command=change_mode, background="red", pady=5, state="disabled")
+start_btn = tk.Button(frame3, text="Activer", command=activate_alarm, background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arreter", command=deactivate_alarm, background="red", pady=5, state="disabled")
 
 title.pack()
 temp.pack()
