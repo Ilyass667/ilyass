@@ -12,6 +12,7 @@ mode = "Désactivé"
 mode_value = "disabled"
 alarm_active = False  # État de l'alarme
 test_mode_active = False  # État du mode Test
+manual_alarm_override = False  # Indique si l'alarme est activée manuellement
 
 # Configuration du capteur DHT11
 DHTPin = 17  # GPIO 17
@@ -30,30 +31,33 @@ GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 def control_alarm():
     global alarm_active
     while True:
-        if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
-            GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
-            GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-            alarm_active = True
-            print("Alarme activée ! Température trop élevée.")
-        elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
-            GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
-            GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-            alarm_active = False
-            print("Alarme désactivée. Température normale.")
+        if not manual_alarm_override:  # Si l'alarme n'est pas activée manuellement
+            if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
+                GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
+                GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+                alarm_active = True
+                print("Alarme activée ! Température trop élevée.")
+            elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
+                GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
+                GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+                alarm_active = False
+                print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
 
 # Fonction pour activer/désactiver manuellement l'alarme
 def control_alarm_manual(activate):
-    global alarm_active
+    global alarm_active, manual_alarm_override
     if activate:
         GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
         GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
         alarm_active = True
+        manual_alarm_override = True  # Activer le mode manuel
         print("Alarme activée manuellement.")
     else:
         GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
         GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
         alarm_active = False
+        manual_alarm_override = False  # Désactiver le mode manuel
         print("Alarme désactivée manuellement.")
 
 # Fonction pour changer le mode
