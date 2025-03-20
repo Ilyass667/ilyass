@@ -18,16 +18,31 @@ manual_alarm_override = False  # Indique si l'alarme est activée manuellement
 DHTPin = 17  # GPIO 17
 dht = DHT(DHTPin)
 
-# Configuration du buzzer actif et de la LED
+# Configuration du buzzer actif, de la LED et du servo
 BUZZER_PIN = 27  # GPIO 27
 LED_PIN = 13  # GPIO 13
+SERVO_PIN = 24  # GPIO 24
 GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
 GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
 GPIO.setup(LED_PIN, GPIO.OUT)  # Configurer la LED en sortie
+GPIO.setup(SERVO_PIN, GPIO.OUT)  # Configurer le servo en sortie
 GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer au démarrage
 GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 
-# Fonction pour activer/désactiver l'alarme (buzzer et LED)
+# Configuration du servo
+servo = GPIO.PWM(SERVO_PIN, 50)  # 50 Hz (20 ms par cycle)
+servo.start(0)  # Démarrer le servo à 0°
+
+# Fonction pour contrôler le servo
+def set_servo_angle(angle):
+    duty = angle / 18 + 2  # Convertir l'angle en duty cycle
+    GPIO.output(SERVO_PIN, True)
+    servo.ChangeDutyCycle(duty)
+    time.sleep(0.5)  # Attendre que le servo atteigne la position
+    GPIO.output(SERVO_PIN, False)
+    servo.ChangeDutyCycle(0)
+
+# Fonction pour activer/désactiver l'alarme (buzzer, LED et servo)
 def control_alarm():
     global alarm_active
     while True:
@@ -35,11 +50,13 @@ def control_alarm():
             if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
                 GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
                 GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+                set_servo_angle(90)  # Tourner le servo à 90°
                 alarm_active = True
                 print("Alarme activée ! Température trop élevée.")
             elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
                 GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
                 GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+                set_servo_angle(0)  # Ramener le servo à 0°
                 alarm_active = False
                 print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
@@ -50,12 +67,14 @@ def control_alarm_manual(activate):
     if activate:
         GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
         GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
+        set_servo_angle(90)  # Tourner le servo à 90°
         alarm_active = True
         manual_alarm_override = True  # Activer le mode manuel
         print("Alarme activée manuellement.")
     else:
         GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
         GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+        set_servo_angle(0)  # Ramener le servo à 0°
         alarm_active = False
         manual_alarm_override = False  # Désactiver le mode manuel
         print("Alarme désactivée manuellement.")
@@ -75,6 +94,7 @@ def change_mode():
         if alarm_active:
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
             GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+            set_servo_angle(0)  # Ramener le servo à 0°
             alarm_active = False
             manual_alarm_override = False  # Réinitialiser le mode manuel
             print("Alarme désactivée en quittant le mode Test.")
@@ -191,6 +211,8 @@ def on_close():
     print("Nettoyage GPIO...")
     GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
     GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
+    set_servo_angle(0)  # Ramener le servo à 0°
+    servo.stop()  # Arrêter le servo
     GPIO.cleanup()  # Nettoyer les GPIO
     window.destroy()
 
