@@ -50,7 +50,7 @@ def control_alarm():
             if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
                 GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
                 GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-                set_servo_angle(180)  # Tourner le servo à 180° (ouvrir la porte)
+                set_servo_angle(90)  # Tourner le servo à 90° (ouvrir la porte)
                 alarm_active = True
                 print("Alarme activée ! Température trop élevée.")
             elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
@@ -67,7 +67,7 @@ def control_alarm_manual(activate):
     if activate:
         GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
         GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-        set_servo_angle(180)  # Tourner le servo à 180° (ouvrir la porte)
+        set_servo_angle(90)  # Tourner le servo à 90° (ouvrir la porte)
         alarm_active = True
         manual_alarm_override = True  # Activer le mode manuel
         print("Alarme activée manuellement.")
