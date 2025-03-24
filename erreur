@@ -106,7 +106,8 @@ def change_mode():
         if alarm_active:
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
             GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-            close_door()  # Fermer la trappe
+            if temp_value < 27.0:  # Si la température est en dessous du seuil
+                close_door()  # Fermer la trappe
             alarm_active = False
             manual_alarm_override = False  # Réinitialiser le mode manuel
             print("Alarme désactivée en quittant le mode Test.")
