@@ -42,6 +42,18 @@ def set_servo_angle(angle):
     GPIO.output(SERVO_PIN, False)
     servo.ChangeDutyCycle(0)
 
+# Fonction pour ouvrir la trappe
+def open_door():
+    set_servo_angle(90)  # Tourner le servo à 90° (ouvrir la trappe)
+    door_status.config(text="État de la trappe : Ouvert")
+    print("Trappe ouverte.")
+
+# Fonction pour fermer la trappe
+def close_door():
+    set_servo_angle(0)  # Ramener le servo à 0° (fermer la trappe)
+    door_status.config(text="État de la trappe : Fermé")
+    print("Trappe fermée.")
+
 # Fonction pour activer/désactiver l'alarme (buzzer, LED et servo)
 def control_alarm():
     global alarm_active
@@ -50,13 +62,13 @@ def control_alarm():
             if temp_value >= 27.0 and not alarm_active:  # Température >= 27°C et alarme inactive
                 GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
                 GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-                set_servo_angle(90)  # Tourner le servo à 90° (ouvrir la porte)
+                open_door()  # Ouvrir la trappe
                 alarm_active = True
                 print("Alarme activée ! Température trop élevée.")
             elif temp_value < 27.0 and alarm_active:  # Température < 27°C et alarme active
                 GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
                 GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-                set_servo_angle(0)  # Ramener le servo à 0° (fermer la porte)
+                close_door()  # Fermer la trappe
                 alarm_active = False
                 print("Alarme désactivée. Température normale.")
         time.sleep(1)  # Vérifier toutes les secondes
@@ -67,14 +79,14 @@ def control_alarm_manual(activate):
     if activate:
         GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Activer le buzzer
         GPIO.output(LED_PIN, GPIO.HIGH)  # Allumer la LED
-        set_servo_angle(90)  # Tourner le servo à 90° (ouvrir la porte)
+        open_door()  # Ouvrir la trappe
         alarm_active = True
         manual_alarm_override = True  # Activer le mode manuel
         print("Alarme activée manuellement.")
     else:
         GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
         GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-        set_servo_angle(0)  # Ramener le servo à 0° (fermer la porte)
+        close_door()  # Fermer la trappe
         alarm_active = False
         manual_alarm_override = False  # Désactiver le mode manuel
         print("Alarme désactivée manuellement.")
@@ -94,7 +106,7 @@ def change_mode():
         if alarm_active:
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
             GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-            set_servo_angle(0)  # Ramener le servo à 0° (fermer la porte)
+            close_door()  # Fermer la trappe
             alarm_active = False
             manual_alarm_override = False  # Réinitialiser le mode manuel
             print("Alarme désactivée en quittant le mode Test.")
@@ -172,8 +184,8 @@ minus_btn = tk.Button(frame1, text="-", command=minus_temp, background="red", pa
 
 door_text = tk.Label(window, text="Trappe :")
 frame2 = tk.Frame(window)
-open_btn = tk.Button(frame2, text="Ouvrir", command=change_mode, background="lightgreen", pady=5, state=tk.DISABLED)
-close_btn = tk.Button(frame2, text="Fermer", command=change_mode, background="red", pady=5, state=tk.DISABLED)
+open_btn = tk.Button(frame2, text="Ouvrir", command=open_door, background="lightgreen", pady=5, state=tk.DISABLED)
+close_btn = tk.Button(frame2, text="Fermer", command=close_door, background="red", pady=5, state=tk.DISABLED)
 
 alarm_text = tk.Label(window, text="Alarme :")
 frame3 = tk.Frame(window)
@@ -211,7 +223,7 @@ def on_close():
     print("Nettoyage GPIO...")
     GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer
     GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-    set_servo_angle(0)  # Ramener le servo à 0° (fermer la porte)
+    close_door()  # Fermer la trappe
     servo.stop()  # Arrêter le servo
     GPIO.cleanup()  # Nettoyer les GPIO
     window.destroy()
