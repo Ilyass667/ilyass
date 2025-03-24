@@ -22,7 +22,7 @@ dht = DHT(DHTPin)
 BUZZER_PIN = 27  # GPIO 27
 LED_PIN = 13  # GPIO 13
 SERVO_PIN = 24  # GPIO 24
-GPIO.setmode(GPIO.BCM)  # Utiliser la numérotation BCM des GPIO
+GPIO.setmode(GPIO.BCM)
 GPIO.setup(BUZZER_PIN, GPIO.OUT)  # Configurer le buzzer en sortie
 GPIO.setup(LED_PIN, GPIO.OUT)  # Configurer la LED en sortie
 GPIO.setup(SERVO_PIN, GPIO.OUT)  # Configurer le servo en sortie
@@ -30,12 +30,12 @@ GPIO.output(BUZZER_PIN, GPIO.LOW)  # Éteindre le buzzer au démarrage
 GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED au démarrage
 
 # Configuration du servo
-servo = GPIO.PWM(SERVO_PIN, 50)  # 50 Hz (20 ms par cycle)
+servo = GPIO.PWM(SERVO_PIN, 50)  # 50 Hz -(20 ms par cycle)-
 servo.start(0)  # Démarrer le servo à 0°
 
 # Fonction pour contrôler le servo
 def set_servo_angle(angle):
-    duty = angle / 18 + 2  # Convertir l'angle en duty cycle
+    duty = angle / 18 + 2  # Convertir l'angle
     GPIO.output(SERVO_PIN, True)
     servo.ChangeDutyCycle(duty)
     time.sleep(1)  # Attendre que le servo atteigne la position
@@ -106,8 +106,7 @@ def change_mode():
         if alarm_active:
             GPIO.output(BUZZER_PIN, GPIO.LOW)  # Désactiver le buzzer
             GPIO.output(LED_PIN, GPIO.LOW)  # Éteindre la LED
-            if temp_value < 27.0:  # Si la température est en dessous du seuil
-                close_door()  # Fermer la trappe
+            close_door()  # Fermer la trappe
             alarm_active = False
             manual_alarm_override = False  # Réinitialiser le mode manuel
             print("Alarme désactivée en quittant le mode Test.")
