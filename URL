@@ -1,1 +1,6 @@
-'databaseURL': 'https://surveillanceincendie-86824-default-rtdb.firebaseio.com/'
+>>> %Run Window.py
+Traceback (most recent call last):
+  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 9, in <module>
+    import firebase_admin  # Ajout Firebase
+ModuleNotFoundError: No module named 'firebase_admin'
+>>> 
