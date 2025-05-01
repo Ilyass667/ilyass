@@ -1,11 +1,225 @@
-pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ source venv/bin/activate
-(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ python Window.py
-/home/pi/Downloads/ilyass-main/PythonProject/Window.py:35: RuntimeWarning: This channel is already in use, continuing anyway.  Use GPIO.setwarnings(False) to disable warnings.
-  GPIO.setup(BUZZER_PIN, GPIO.OUT)
-/home/pi/Downloads/ilyass-main/PythonProject/Window.py:36: RuntimeWarning: This channel is already in use, continuing anyway.  Use GPIO.setwarnings(False) to disable warnings.
-  GPIO.setup(LED_PIN, GPIO.OUT)
-/home/pi/Downloads/ilyass-main/PythonProject/Window.py:37: RuntimeWarning: This channel is already in use, continuing anyway.  Use GPIO.setwarnings(False) to disable warnings.
-  GPIO.setup(SERVO_PIN, GPIO.OUT)
-Erreur Firebase : ('invalid_grant: Invalid JWT Signature.', {'error': 'invalid_grant', 'error_description': 'Invalid JWT Signature.'})
-Erreur Firebase : ('invalid_grant: Invalid JWT Signature.', {'error': 'invalid_grant', 'error_description': 'Invalid JWT Signature.'})
-Erreur Firebase : ('invalid_grant: Invalid JWT Signature.', {'error': 'invalid_grant', 'error_description': 'Invalid JWT Signature.'})
+import tkinter as tk
+import time
+import threading
+from datetime import datetime  # Ajout pour le timestamp
+from Freenove_DHT import DHT  # Module pour le capteur DHT11
+import RPi.GPIO as GPIO  # Bibliothèque pour contrôler les GPIO
+import firebase_admin  # Ajout Firebase
+from firebase_admin import credentials, db  # Ajout Firebase
+
+# Initialisation Firebase
+cred = credentials.Certificate("serviceAccountKey.json")  # Remplace par ton vrai nom de fichier
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://surveillanceincendie-86824-default-rtdb.firebaseio.com/'  # Ton URL Firebase (avec slash final)
+})
+
+# Variables globales
+temp_value = 15.0          # Température par défaut
+current_humidity = 0.0     # Humidité mesurée
+door = "Fermé"
+mode = "Désactivé"
+mode_value = "disabled"
+alarm_active = False       # État de l'alarme
+OKtest_mode_active = False   # État du mode Test
+manual_alarm_override = False  # Indique si l'alarme est activée manuellement
+
+# Configuration du capteur DHT11
+DHTPin = 17  # GPIO 17
+dht = DHT(DHTPin)
+
+# Configuration du buzzer actif, de la LED et du servo
+BUZZER_PIN = 27  # GPIO 27
+LED_PIN = 13     # GPIO 13
+SERVO_PIN = 24   # GPIO 24
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
+GPIO.setup(LED_PIN, GPIO.OUT)
+GPIO.setup(SERVO_PIN, GPIO.OUT)
+GPIO.output(BUZZER_PIN, GPIO.LOW)
+GPIO.output(LED_PIN, GPIO.LOW)
+servo = GPIO.PWM(SERVO_PIN, 50)  # 50 Hz
+servo.start(0)
+
+# Fonctions actionneurs
+def set_servo_angle(angle):
+    duty = angle / 18 + 2
+    GPIO.output(SERVO_PIN, True)
+    servo.ChangeDutyCycle(duty)
+    time.sleep(1)
+    GPIO.output(SERVO_PIN, False)
+    servo.ChangeDutyCycle(0)
+
+def open_door():
+    set_servo_angle(90)
+    door_status.config(text="État de la trappe : Ouvert")
+    print("Trappe ouverte.")
+
+def close_door():
+    set_servo_angle(0)
+    door_status.config(text="État de la trappe : Fermé")
+    print("Trappe fermée.")
+
+# Boucle d'alarme automatique
+def control_alarm():
+    global alarm_active
+    while True:
+        if not manual_alarm_override:
+            if temp_value >= 27.0 and not alarm_active:
+                GPIO.output(BUZZER_PIN, GPIO.HIGH)
+                GPIO.output(LED_PIN, GPIO.HIGH)
+                open_door()
+                alarm_active = True
+                print("Alarme activée ! Température trop élevée.")
+            elif temp_value < 27.0 and alarm_active:
+                GPIO.output(BUZZER_PIN, GPIO.LOW)
+                GPIO.output(LED_PIN, GPIO.LOW)
+                close_door()
+                alarm_active = False
+                print("Alarme désactivée. Température normale.")
+        time.sleep(1)
+
+def control_alarm_manual(activate):
+    global alarm_active, manual_alarm_override
+    manual_alarm_override = activate
+    if activate:
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)
+        GPIO.output(LED_PIN, GPIO.HIGH)
+        open_door()
+        alarm_active = True
+        print("Alarme activée manuellement.")
+    else:
+        GPIO.output(BUZZER_PIN, GPIO.LOW)
+        GPIO.output(LED_PIN, GPIO.LOW)
+        close_door()
+        alarm_active = False
+        print("Alarme désactivée manuellement.")
+
+# Mode Test
+def change_mode():
+    global mode, mode_value, test_mode_active, alarm_active, manual_alarm_override
+    if mode == "Désactivé":
+        mode = "Activé"
+        mode_value = "normal"
+        test_mode_active = True
+    else:
+        mode = "Désactivé"
+        mode_value = "disabled"
+        test_mode_active = False
+        # Réinitialiser état actionneurs
+        close_door()
+        manual_alarm_override = False
+        alarm_active = False
+    test_mode.configure(text=f"Mode test : {mode}")
+    plus_btn.configure(state=mode_value)
+    minus_btn.configure(state=mode_value)
+    open_btn.configure(state=mode_value)
+    close_btn.configure(state=mode_value)
+    start_btn.configure(state=mode_value)
+    end_btn.configure(state=mode_value)
+
+# UI Test
+def plus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value += 1
+        update_display()
+
+def minus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value -= 1
+        update_display()
+
+def update_display():
+    temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+# Lecture capteur et envoi Firebase
+def read_temp_loop():
+    def loop():
+        global temp_value, current_humidity
+        while True:
+            if not test_mode_active:
+                for _ in range(15):
+                    chk = dht.readDHT11()
+                    if chk == 0:
+                        current_humidity = dht.getHumidity()
+                        temp_value = dht.getTemperature()
+                        timestamp = datetime.now().isoformat()
+                        data = {
+                            'temperature': temp_value,
+                            'humidity': current_humidity,
+                            'timestamp': timestamp
+                        }
+                        try:
+                            db.reference('donnees').push(data)
+                        except Exception as e:
+                            print("Erreur Firebase :", e)
+                        window.after(0, update_display)
+                        break
+            time.sleep(2)
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+
+# Interface graphique
+window = tk.Tk()
+window.geometry('400x450')
+
+title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
+temp_label = tk.Label(window, text="Température:")
+temp2 = tk.Label(window, text="Température:")
+temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", pady=10, font=("Arial", 10, "bold"))
+mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
+
+frame1 = tk.Frame(window)
+plus_btn = tk.Button(frame1, text="+", command=plus_temp, background="lightgreen", padx=8, pady=5, state=tk.DISABLED)
+minus_btn = tk.Button(frame1, text="-", command=minus_temp, background="red", padx=8, pady=5, state=tk.DISABLED)
+
+door_text = tk.Label(window, text="Trappe :")
+frame2 = tk.Frame(window)
+open_btn = tk.Button(frame2, text="Ouvrir", command=open_door, background="lightgreen", pady=5, state=tk.DISABLED)
+close_btn = tk.Button(frame2, text="Fermer", command=close_door, background="red", pady=5, state=tk.DISABLED)
+
+alarm_text = tk.Label(window, text="Alarme :")
+frame3 = tk.Frame(window)
+start_btn = tk.Button(frame3, text="Activer", command=lambda: control_alarm_manual(True), background="lightgreen", pady=5, state=tk.DISABLED)
+end_btn = tk.Button(frame3, text="Arrêter", command=lambda: control_alarm_manual(False), background="red", pady=5, state=tk.DISABLED)
+
+# Placement widgets
+title.pack()
+temp_label.pack()
+temp_value_label.pack()
+door_status.pack()
+test_mode.pack()
+mode_btn.pack(pady=10)
+temp2.pack()
+frame1.pack(pady=5)
+plus_btn.pack(side=tk.LEFT, padx=5)
+minus_btn.pack(side=tk.LEFT)
+door_text.pack()
+frame2.pack(pady=5)
+open_btn.pack(side=tk.LEFT, padx=5)
+close_btn.pack(side=tk.LEFT)
+alarm_text.pack()
+frame3.pack(pady=5)
+start_btn.pack(side=tk.LEFT, padx=5)
+end_btn.pack(side=tk.LEFT)
+
+# Démarrage threads
+read_temp_loop()
+alarm_thread = threading.Thread(target=control_alarm, daemon=True)
+alarm_thread.start()
+
+# Nettoyage GPIO à la fermeture
+def on_close():
+    print("Nettoyage GPIO...")
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+    GPIO.output(LED_PIN, GPIO.LOW)
+    close_door()
+    servo.stop()
+    GPIO.cleanup()
+    window.destroy()
+
+window.protocol("WM_DELETE_WINDOW", on_close)
+window.mainloop()
