@@ -157,6 +157,11 @@ def read_temp_loop():
                         temp_value = dht.getTemperature()
                         window.after(0, update_display)  # Mettre à jour l'interface
                         break  # Sortir de la boucle si la lecture est réussie
+                    
+                    #else:
+                        #print("Erreur capteur DHT11, code:", chk)
+                    #time.sleep(0.1)  # Attendre 0,1 seconde avant de réessayer
+                    
             time.sleep(2)  # Attendre 2 secondes avant la prochaine lecture
 
     t = threading.Thread(target=loop, daemon=True)
@@ -231,3 +236,4 @@ def on_close():
 
 window.protocol("WM_DELETE_WINDOW", on_close)
 window.mainloop()
+
