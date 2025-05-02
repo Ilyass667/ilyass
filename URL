@@ -1,11 +1,9 @@
+CREATE DATABASE fire_surveillance;
+USE fire_surveillance;
 
-E: Package 'mysql-server' has no installation candidate
-(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ sudo apt install mysql-server
-Reading package lists... Done
-Building dependency tree... Done
-Reading state information... Done
-Package mysql-server is not available, but is referred to by another package.
-This may mean that the package is missing, has been obsoleted, or
-is only available from another source
-
-E: Package 'mysql-server' has no installation candidat
+CREATE TABLE sensor_data (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    temperature FLOAT NOT NULL,
+    humidity FLOAT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
