@@ -1,5 +1,56 @@
-(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ python Window.py
-Traceback (most recent call last):
-  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 9, in <module>
-    import mariadb
-ModuleNotFoundError: No module named 'mariadb'
+(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ source venv/bin/activate
+(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ pip3 install mariadb
+Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Collecting mariadb
+  Using cached mariadb-1.1.12.tar.gz (85 kB)
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... error
+  error: subprocess-exited-with-error
+  
+  × Getting requirements to build wheel did not run successfully.
+  │ exit code: 1
+  ╰─> [34 lines of output]
+      /bin/sh: 1: mariadb_config: not found
+      Traceback (most recent call last):
+        File "/home/pi/Downloads/ilyass-main/PythonProject/venv/lib/python3.11/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 353, in <module>
+          main()
+        File "/home/pi/Downloads/ilyass-main/PythonProject/venv/lib/python3.11/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 335, in main
+          json_out['return_val'] = hook(**hook_input['kwargs'])
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/home/pi/Downloads/ilyass-main/PythonProject/venv/lib/python3.11/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 118, in get_requires_for_build_wheel
+          return hook(config_settings)
+                 ^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-fxi5yb_a/overlay/lib/python3.11/site-packages/setuptools/build_meta.py", line 331, in get_requires_for_build_wheel
+          return self._get_build_requires(config_settings, requirements=[])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-fxi5yb_a/overlay/lib/python3.11/site-packages/setuptools/build_meta.py", line 301, in _get_build_requires
+          self.run_setup()
+        File "/tmp/pip-build-env-fxi5yb_a/overlay/lib/python3.11/site-packages/setuptools/build_meta.py", line 512, in run_setup
+          super().run_setup(setup_script=setup_script)
+        File "/tmp/pip-build-env-fxi5yb_a/overlay/lib/python3.11/site-packages/setuptools/build_meta.py", line 317, in run_setup
+          exec(code, locals())
+        File "<string>", line 27, in <module>
+        File "/tmp/pip-install-eoazfokq/mariadb_396ee81f4d8f40af849ca83d4fd65592/mariadb_posix.py", line 62, in get_config
+          cc_version = mariadb_config(config_prg, "cc_version")
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-install-eoazfokq/mariadb_396ee81f4d8f40af849ca83d4fd65592/mariadb_posix.py", line 28, in mariadb_config
+          raise EnvironmentError(
+      OSError: mariadb_config not found.
+      
+      This error typically indicates that MariaDB Connector/C, a dependency which
+      must be preinstalled, is not found.
+      If MariaDB Connector/C is not installed, see installation instructions
+      If MariaDB Connector/C is installed, either set the environment variable
+      MARIADB_CONFIG or edit the configuration file 'site.cfg' to set the
+       'mariadb_config' option to the file location of the mariadb_config utility.
+      
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: subprocess-exited-with-error
+
+× Getting requirements to build wheel did not run successfully.
+│ exit code: 1
+╰─> See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
