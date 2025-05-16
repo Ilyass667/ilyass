@@ -93,9 +93,9 @@ def close_door():
     print("Trappe fermée.")
 
 # === Gestion du mode test ===
-def sync_test_mode(snapshot):
+def sync_test_mode(event):
     global test_mode_active
-    new_mode = snapshot.val()
+    new_mode = event.data
     if new_mode is not None and new_mode != test_mode_active:
         test_mode_active = new_mode
         window.after(0, update_test_mode_ui)
@@ -271,8 +271,8 @@ window.title("Système de Surveillance d'Incendie")
 title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
 temp_label = tk.Label(window, text="Température:")
 temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
-door_status = tk.Label(window, text="État de la trappe : Fermé", pady=10)
-test_mode = tk.Label(window, text="Mode test : Désactivé", fg="blue", font=("Arial", 10, "bold"))
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", font=("Arial", 10, "bold"))
 mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
 
 # Boutons de contrôle
@@ -301,9 +301,6 @@ start_btn.grid(row=2, column=0, padx=5, pady=5)
 end_btn.grid(row=2, column=1, padx=5, pady=5)
 
 # Démarrage
-test_mode_ref = db.reference('testMode/enabled')
-test_mode_ref.listen(sync_test_mode)
-
 read_temp_loop()
 threading.Thread(target=control_alarm, daemon=True).start()
 process_commands_loop()
