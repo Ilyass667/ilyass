@@ -14,6 +14,10 @@ firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://surveillanceincendie-86824-default-rtdb.firebaseio.com/'
 })
 
+# Initialisation du mode test dans Firebase
+db.reference('testMode/enabled').set(False)  # Nouveau
+test_mode_ref = db.reference('testMode/enabled')  # Nouveau
+
 # === Configuration MariaDB ===
 try:
     mysql_db = mariadb.connect(
@@ -133,10 +137,9 @@ def control_alarm_manual(activate: bool):
     activate_alarm(activate)
 
 def change_mode():
-    global test_mode_active
-    test_mode_active = not test_mode_active
-    db.reference('testMode/enabled').set(test_mode_active)
-    print(f"Mode test {'activé' if test_mode_active else 'désactivé'}")
+    new_mode = not test_mode_active  # Modification importante ici
+    db.reference('testMode/enabled').set(new_mode)
+    print(f"Demande de mode test : {'activé' if new_mode else 'désactivé'}")
 
 def update_display():
     temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
@@ -301,6 +304,7 @@ start_btn.grid(row=2, column=0, padx=5, pady=5)
 end_btn.grid(row=2, column=1, padx=5, pady=5)
 
 # Démarrage
+test_mode_ref.listen(sync_test_mode)  # Nouveau - Écouteur Firebase
 read_temp_loop()
 threading.Thread(target=control_alarm, daemon=True).start()
 process_commands_loop()
