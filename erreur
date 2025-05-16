@@ -1,5 +1,3 @@
-tu peut me donner le code raberry pi de A a Z je veux tout le scipt tout le fichier modifier je veux juste copy past :
-
 import tkinter as tk
 import time
 import threading
