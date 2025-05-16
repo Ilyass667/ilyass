@@ -1,57 +1,8 @@
-
-# === Interface graphique ===
-window = tk.Tk()
-window.geometry('400x450')
-window.title("Système de Surveillance d'Incendie")
-
-# Widgets
-title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
-temp_label = tk.Label(window, text="Température:")
-temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
-door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
-test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", font=("Arial", 10, "bold"))
-mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
-
-# Boutons de contrôle
-control_frame = tk.Frame(window)
-plus_btn = tk.Button(control_frame, text="+", command=plus_temp, bg="lightgreen", state=tk.DISABLED)
-minus_btn = tk.Button(control_frame, text="-", command=minus_temp, bg="red", state=tk.DISABLED)
-open_btn = tk.Button(control_frame, text="Ouvrir", command=open_door, bg="lightgreen", state=tk.DISABLED)
-close_btn = tk.Button(control_frame, text="Fermer", command=close_door, bg="red", state=tk.DISABLED)
-start_btn = tk.Button(control_frame, text="Activer", command=lambda: control_alarm_manual(True), bg="lightgreen", state=tk.DISABLED)
-end_btn = tk.Button(control_frame, text="Arrêter", command=lambda: control_alarm_manual(False), bg="red", state=tk.DISABLED)
-
-# Placement
-title.pack()
-temp_label.pack()
-temp_value_label.pack()
-door_status.pack()
-test_mode.pack()
-mode_btn.pack(pady=10)
-
-control_frame.pack(pady=10)
-plus_btn.grid(row=0, column=0, padx=5)
-minus_btn.grid(row=0, column=1, padx=5)
-open_btn.grid(row=1, column=0, padx=5, pady=5)
-close_btn.grid(row=1, column=1, padx=5, pady=5)
-start_btn.grid(row=2, column=0, padx=5, pady=5)
-end_btn.grid(row=2, column=1, padx=5, pady=5)
-
-# Démarrage
-read_temp_loop()
-threading.Thread(target=control_alarm, daemon=True).start()
-process_commands_loop()
-
-def on_close():
-    print("Nettoyage...")
-    mysql_cursor.close()
-    mysql_db.close()
-    GPIO.output(BUZZER_PIN, GPIO.LOW)
-    GPIO.output(LED_PIN, GPIO.LOW)
-    close_door()
-    servo.stop()
-    GPIO.cleanup()
-    window.destroy()
-
-window.protocol("WM_DELETE_WINDOW", on_close)
-window.mainloop()
+pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ source venv/bin/activate
+(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ python Window.py
+Connexion MariaDB réussie !
+Traceback (most recent call last):
+  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 275, in <module>
+    test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", font=("Arial", 10, "bold"))
+                                                     ^^^^
+NameError: name 'mode' is not defined
