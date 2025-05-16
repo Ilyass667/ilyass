@@ -14,9 +14,10 @@ firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://surveillanceincendie-86824-default-rtdb.firebaseio.com/'
 })
 
-# Initialisation du mode test dans Firebase
-db.reference('testMode/enabled').set(False)  # Nouveau
-test_mode_ref = db.reference('testMode/enabled')  # Nouveau
+# Initialisation des états
+db.reference('testMode/enabled').set(False)
+db.reference('status/door').set('closed')  # Nouveau
+db.reference('status/alarm').set('inactive')  # Nouveau
 
 # === Configuration MariaDB ===
 try:
@@ -89,11 +90,13 @@ def set_servo_angle(angle):
 def open_door():
     set_servo_angle(90)
     door_status.config(text="État de la trappe : Ouvert")
+    db.reference('status/door').set('open')  # Mise à jour Firebase
     print("Trappe ouverte.")
 
 def close_door():
     set_servo_angle(0)
     door_status.config(text="État de la trappe : Fermé")
+    db.reference('status/door').set('closed')  # Mise à jour Firebase
     print("Trappe fermée.")
 
 # === Gestion du mode test ===
@@ -129,6 +132,7 @@ def activate_alarm(activate: bool):
     GPIO.output(BUZZER_PIN, GPIO.HIGH if activate else GPIO.LOW)
     GPIO.output(LED_PIN, GPIO.HIGH if activate else GPIO.LOW)
     (open_door if activate else close_door)()
+    db.reference('status/alarm').set('active' if activate else 'inactive')  # Mise à jour Firebase
     print(f"Alarme {'activée' if activate else 'désactivée'}!")
 
 def control_alarm_manual(activate: bool):
@@ -137,7 +141,7 @@ def control_alarm_manual(activate: bool):
     activate_alarm(activate)
 
 def change_mode():
-    new_mode = not test_mode_active  # Modification importante ici
+    new_mode = not test_mode_active
     db.reference('testMode/enabled').set(new_mode)
     print(f"Demande de mode test : {'activé' if new_mode else 'désactivé'}")
 
@@ -304,7 +308,7 @@ start_btn.grid(row=2, column=0, padx=5, pady=5)
 end_btn.grid(row=2, column=1, padx=5, pady=5)
 
 # Démarrage
-test_mode_ref.listen(sync_test_mode)  # Nouveau - Écouteur Firebase
+db.reference('testMode/enabled').listen(sync_test_mode)
 read_temp_loop()
 threading.Thread(target=control_alarm, daemon=True).start()
 process_commands_loop()
