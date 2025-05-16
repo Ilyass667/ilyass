@@ -24,7 +24,6 @@ try:
     )
     mysql_cursor = mysql_db.cursor()
     
-    # Création des tables si inexistantes
     mysql_cursor.execute("""
         CREATE TABLE IF NOT EXISTS sensor_data (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,8 +52,6 @@ except Exception as e:
 temp_value = 15.0
 current_humidity = 0.0
 door = "Fermé"
-mode = "Désactivé"
-mode_value = "disabled"
 alarm_active = False
 test_mode_active = False
 manual_alarm_override = False
@@ -81,7 +78,7 @@ def set_servo_angle(angle):
     duty = angle / 18 + 2
     GPIO.output(SERVO_PIN, True)
     servo.ChangeDutyCycle(duty)
-    time.sleep(1)
+    time.sleep(0.5)
     GPIO.output(SERVO_PIN, False)
     servo.ChangeDutyCycle(0)
 
@@ -95,11 +92,27 @@ def close_door():
     door_status.config(text="État de la trappe : Fermé")
     print("Trappe fermée.")
 
+# === Gestion du mode test ===
+def sync_test_mode(snapshot):
+    global test_mode_active
+    new_mode = snapshot.val()
+    if new_mode is not None and new_mode != test_mode_active:
+        test_mode_active = new_mode
+        mode = "Activé" if test_mode_active else "Désactivé"
+        test_mode.config(text=f"Mode test : {mode}")
+        btn_state = tk.NORMAL if test_mode_active else tk.DISABLED
+        for btn in [plus_btn, minus_btn, open_btn, close_btn, start_btn, end_btn]:
+            btn.configure(state=btn_state)
+        print(f"Mode test synchronisé : {mode}")
+
+test_mode_ref = db.reference('testMode/enabled')
+test_mode_ref.listen(sync_test_mode)
+
 # === Logique métier ===
 def control_alarm():
     global alarm_active
     while True:
-        if not manual_alarm_override:
+        if not manual_alarm_override and not test_mode_active:
             if temp_value >= 27.0 and not alarm_active:
                 activate_alarm(True)
             elif temp_value < 27.0 and alarm_active:
@@ -120,21 +133,25 @@ def control_alarm_manual(activate: bool):
     activate_alarm(activate)
 
 def change_mode():
-    global mode, mode_value, test_mode_active
-    test_mode_active = not test_mode_active
-    mode = "Activé" if test_mode_active else "Désactivé"
-    mode_value = "normal" if test_mode_active else "disabled"
-    
-    if not test_mode_active:
-        close_door()
-        activate_alarm(False)
-    
-    test_mode.config(text=f"Mode test : {mode}")
-    for btn in [plus_btn, minus_btn, open_btn, close_btn, start_btn, end_btn]:
-        btn.configure(state=mode_value)
+    global test_mode_active
+    test_mode_active = !test_mode_active
+    db.reference('testMode/enabled').set(test_mode_active)
+    print(f"Mode test {'activé' if test_mode_active else 'désactivé'}")
 
 def update_display():
     temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+def plus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value += 1.0
+        update_display()
+
+def minus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value -= 1.0
+        update_display()
 
 # === Threads critiques ===
 def read_temp_loop():
@@ -144,19 +161,16 @@ def read_temp_loop():
         
         while True:
             if time.time() >= next_run and not test_mode_active:
-                for _ in range(15):  # 15 tentatives sur 30 secondes max
+                for _ in range(15):
                     chk = dht.readDHT11()
                     if chk == 0:
                         real_temp = dht.getTemperature()
                         real_humidity = dht.getHumidity()
                         
                         try:
-                            # Synchronisation double écriture
                             with mysql_db.cursor() as cursor:
-                                cursor.execute("""
-                                    INSERT INTO sensor_data (temperature, humidity)
-                                    VALUES (?, ?)
-                                """, (real_temp, real_humidity))
+                                cursor.execute("INSERT INTO sensor_data (temperature, humidity) VALUES (?, ?)", 
+                                              (real_temp, real_humidity))
                             
                             db.reference('donnees').push({
                                 'temperature': real_temp,
@@ -164,24 +178,17 @@ def read_temp_loop():
                                 'timestamp': datetime.now().isoformat()
                             })
                             
-                            # Mise à jour interface
                             temp_value = real_temp
                             current_humidity = real_humidity
                             window.after(0, update_display)
-                            
                             mysql_db.commit()
-                            print(f"Données synchronisées: {real_temp}°C")
                             break
                         
                         except Exception as e:
-                            print(f"Erreur synchronisation: {e}")
                             mysql_db.rollback()
                     
                     time.sleep(2)
-                else:
-                    print("Aucune donnée valide du capteur")
-                
-                next_run = time.time() + 15  # Intervalle strict de 15s
+                next_run = time.time() + 15
             
             time.sleep(1)
     
@@ -193,14 +200,12 @@ def process_commands_loop():
         
         while True:
             try:
-                # Synchronisation cloud → local
                 cloud_commands = ref.order_by_child('executed').equal_to(False).get() or {}
                 
                 for cmd_id, cmd in cloud_commands.items():
                     if not is_command_processed(cmd_id):
-                        execute_command(cmd_id, cmd, source='cloud')
+                        execute_command(cmd_id, cmd, 'cloud')
                 
-                # Synchronisation local → cloud
                 sync_local_commands()
                 
             except Exception as e:
@@ -210,16 +215,16 @@ def process_commands_loop():
     
     def is_command_processed(cmd_id: str) -> bool:
         with mysql_db.cursor() as cursor:
-            cursor.execute("""
-                SELECT executed FROM commands 
-                WHERE id = ? AND source = 'cloud'
-            """, (cmd_id,))
+            cursor.execute("SELECT executed FROM commands WHERE id = ? AND source = 'cloud'", (cmd_id,))
             result = cursor.fetchone()
             return result[0] if result else False
     
     def execute_command(cmd_id: str, cmd: dict, source: str):
+        if not test_mode_active:
+            print("Commande ignorée (mode test désactivé)")
+            return
+        
         try:
-            # Exécution de la commande
             action = cmd.get('action', '')
             {
                 'trap_open': open_door,
@@ -228,7 +233,6 @@ def process_commands_loop():
                 'buzzer_off': lambda: control_alarm_manual(False)
             }.get(action, lambda: None)()
             
-            # Mise à jour des bases
             with mysql_db.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO commands (id, action, executed, source)
@@ -245,22 +249,15 @@ def process_commands_loop():
     
     def sync_local_commands():
         with mysql_db.cursor() as cursor:
-            cursor.execute("""
-                SELECT id, action FROM commands 
-                WHERE source = 'local' AND executed = FALSE
-            """)
+            cursor.execute("SELECT id, action FROM commands WHERE source = 'local' AND executed = FALSE")
             local_commands = cursor.fetchall()
             
             for cmd_id, action in local_commands:
                 try:
-                    db.reference(f'commands/{cmd_id}').set({
-                        'action': action,
-                        'executed': False
-                    })
+                    db.reference(f'commands/{cmd_id}').set({'action': action, 'executed': False})
                     cursor.execute("UPDATE commands SET executed = TRUE WHERE id = ?", (cmd_id,))
                     mysql_db.commit()
                 except Exception as e:
-                    print(f"Erreur sync locale: {e}")
                     mysql_db.rollback()
     
     threading.Thread(target=loop, daemon=True).start()
@@ -274,8 +271,8 @@ window.title("Système de Surveillance d'Incendie")
 title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
 temp_label = tk.Label(window, text="Température:")
 temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
-door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
-test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", font=("Arial", 10, "bold"))
+door_status = tk.Label(window, text="État de la trappe : Fermé", pady=10)
+test_mode = tk.Label(window, text="Mode test : Désactivé", fg="blue", font=("Arial", 10, "bold"))
 mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
 
 # Boutons de contrôle
