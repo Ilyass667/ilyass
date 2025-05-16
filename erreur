@@ -78,7 +78,7 @@ def set_servo_angle(angle):
     duty = angle / 18 + 2
     GPIO.output(SERVO_PIN, True)
     servo.ChangeDutyCycle(duty)
-    time.sleep(1)
+    time.sleep(0.5)
     GPIO.output(SERVO_PIN, False)
     servo.ChangeDutyCycle(0)
 
@@ -93,26 +93,20 @@ def close_door():
     print("Trappe fermée.")
 
 # === Gestion du mode test ===
-test_mode_ref = db.reference('settings/test_mode')
+def sync_test_mode(snapshot):
+    global test_mode_active
+    new_mode = snapshot.val()
+    if new_mode is not None and new_mode != test_mode_active:
+        test_mode_active = new_mode
+        window.after(0, update_test_mode_ui)
 
 def update_test_mode_ui():
-    state = tk.NORMAL if test_mode_active else tk.DISABLED
+    mode = "Activé" if test_mode_active else "Désactivé"
+    btn_state = tk.NORMAL if test_mode_active else tk.DISABLED
+    test_mode.config(text=f"Mode test : {mode}")
     for btn in [plus_btn, minus_btn, open_btn, close_btn, start_btn, end_btn]:
-        btn.configure(state=state)
-    test_mode.config(text=f"Mode test : {'Activé' if test_mode_active else 'Désactivé'}")
-    
-    if not test_mode_active:
-        close_door()
-        activate_alarm(False)
-
-def test_mode_listener(event):
-    global test_mode_active
-    if event.data is not None and event.data != test_mode_active:
-        test_mode_active = event.data
-        window.after(0, update_test_mode_ui)
-        print(f"Mode test mis à jour: {'Activé' if test_mode_active else 'Désactivé'}")
-
-test_mode_ref.listen(test_mode_listener)
+        btn.configure(state=btn_state)
+    print(f"Mode test synchronisé : {mode}")
 
 # === Logique métier ===
 def control_alarm():
@@ -139,14 +133,25 @@ def control_alarm_manual(activate: bool):
     activate_alarm(activate)
 
 def change_mode():
-    try:
-        new_mode = not test_mode_active
-        test_mode_ref.set(new_mode)
-    except Exception as e:
-        print(f"Erreur de synchronisation: {e}")
+    global test_mode_active
+    test_mode_active = not test_mode_active
+    db.reference('testMode/enabled').set(test_mode_active)
+    print(f"Mode test {'activé' if test_mode_active else 'désactivé'}")
 
 def update_display():
     temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+def plus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value += 1.0
+        update_display()
+
+def minus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value -= 1.0
+        update_display()
 
 # === Threads critiques ===
 def read_temp_loop():
@@ -165,7 +170,7 @@ def read_temp_loop():
                         try:
                             with mysql_db.cursor() as cursor:
                                 cursor.execute("INSERT INTO sensor_data (temperature, humidity) VALUES (?, ?)", 
-                                             (real_temp, real_humidity))
+                                              (real_temp, real_humidity))
                             
                             db.reference('donnees').push({
                                 'temperature': real_temp,
@@ -183,7 +188,6 @@ def read_temp_loop():
                             mysql_db.rollback()
                     
                     time.sleep(2)
-                
                 next_run = time.time() + 15
             
             time.sleep(1)
@@ -203,7 +207,7 @@ def process_commands_loop():
                         execute_command(cmd_id, cmd, 'cloud')
                 
                 sync_local_commands()
-            
+                
             except Exception as e:
                 print(f"Erreur synchronisation: {e}")
             
@@ -212,9 +216,14 @@ def process_commands_loop():
     def is_command_processed(cmd_id: str) -> bool:
         with mysql_db.cursor() as cursor:
             cursor.execute("SELECT executed FROM commands WHERE id = ? AND source = 'cloud'", (cmd_id,))
-            return cursor.fetchone()[0] if cursor.rowcount > 0 else False
+            result = cursor.fetchone()
+            return result[0] if result else False
     
     def execute_command(cmd_id: str, cmd: dict, source: str):
+        if not test_mode_active:
+            print("Commande ignorée (mode test désactivé)")
+            return
+        
         try:
             action = cmd.get('action', '')
             {
@@ -222,7 +231,7 @@ def process_commands_loop():
                 'trap_close': close_door,
                 'buzzer_on': lambda: control_alarm_manual(True),
                 'buzzer_off': lambda: control_alarm_manual(False)
-            }[action]()
+            }.get(action, lambda: None)()
             
             with mysql_db.cursor() as cursor:
                 cursor.execute("""
@@ -241,7 +250,9 @@ def process_commands_loop():
     def sync_local_commands():
         with mysql_db.cursor() as cursor:
             cursor.execute("SELECT id, action FROM commands WHERE source = 'local' AND executed = FALSE")
-            for cmd_id, action in cursor.fetchall():
+            local_commands = cursor.fetchall()
+            
+            for cmd_id, action in local_commands:
                 try:
                     db.reference(f'commands/{cmd_id}').set({'action': action, 'executed': False})
                     cursor.execute("UPDATE commands SET executed = TRUE WHERE id = ?", (cmd_id,))
@@ -264,9 +275,10 @@ door_status = tk.Label(window, text="État de la trappe : Fermé", pady=10)
 test_mode = tk.Label(window, text="Mode test : Désactivé", fg="blue", font=("Arial", 10, "bold"))
 mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
 
+# Boutons de contrôle
 control_frame = tk.Frame(window)
-plus_btn = tk.Button(control_frame, text="+", bg="lightgreen", state=tk.DISABLED)
-minus_btn = tk.Button(control_frame, text="-", bg="red", state=tk.DISABLED)
+plus_btn = tk.Button(control_frame, text="+", command=plus_temp, bg="lightgreen", state=tk.DISABLED)
+minus_btn = tk.Button(control_frame, text="-", command=minus_temp, bg="red", state=tk.DISABLED)
 open_btn = tk.Button(control_frame, text="Ouvrir", command=open_door, bg="lightgreen", state=tk.DISABLED)
 close_btn = tk.Button(control_frame, text="Fermer", command=close_door, bg="red", state=tk.DISABLED)
 start_btn = tk.Button(control_frame, text="Activer", command=lambda: control_alarm_manual(True), bg="lightgreen", state=tk.DISABLED)
@@ -288,17 +300,16 @@ close_btn.grid(row=1, column=1, padx=5, pady=5)
 start_btn.grid(row=2, column=0, padx=5, pady=5)
 end_btn.grid(row=2, column=1, padx=5, pady=5)
 
-# Initialisation
-initial_mode = test_mode_ref.get()
-if initial_mode is not None:
-    test_mode_active = initial_mode
-    update_test_mode_ui()
+# Démarrage
+test_mode_ref = db.reference('testMode/enabled')
+test_mode_ref.listen(sync_test_mode)
 
 read_temp_loop()
 threading.Thread(target=control_alarm, daemon=True).start()
 process_commands_loop()
 
 def on_close():
+    print("Nettoyage...")
     mysql_cursor.close()
     mysql_db.close()
     GPIO.output(BUZZER_PIN, GPIO.LOW)
