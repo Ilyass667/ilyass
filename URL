@@ -1,8 +1,320 @@
-pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ source venv/bin/activate
-(venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ python Window.py
-Connexion MariaDB réussie !
-Traceback (most recent call last):
-  File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 275, in <module>
-    test_mode = tk.Label(window, text=f"Mode test : {mode}", fg="blue", font=("Arial", 10, "bold"))
-                                                     ^^^^
-NameError: name 'mode' is not defined
+import tkinter as tk
+import time
+import threading
+from datetime import datetime
+from Freenove_DHT import DHT
+import RPi.GPIO as GPIO
+import firebase_admin
+from firebase_admin import credentials, db
+import mariadb
+
+# === Initialisation Firebase ===
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://surveillanceincendie-86824-default-rtdb.firebaseio.com/'
+})
+
+# === Configuration MariaDB ===
+try:
+    mysql_db = mariadb.connect(
+        user="root",
+        password="root",
+        host="localhost",
+        database="fire_surveillance"
+    )
+    mysql_cursor = mysql_db.cursor()
+    
+    mysql_cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sensor_data (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            temperature FLOAT NOT NULL,
+            humidity FLOAT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    mysql_cursor.execute("""
+        CREATE TABLE IF NOT EXISTS commands (
+            id VARCHAR(50) PRIMARY KEY,
+            action VARCHAR(50) NOT NULL,
+            executed BOOLEAN DEFAULT FALSE,
+            source ENUM('local', 'cloud') NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    print("Connexion MariaDB réussie !")
+except Exception as e:
+    print(f"Erreur MariaDB: {e}")
+    exit()
+
+# === Variables globales ===
+temp_value = 15.0
+current_humidity = 0.0
+door = "Fermé"
+alarm_active = False
+test_mode_active = False
+manual_alarm_override = False
+
+# === Configuration matérielle ===
+DHTPin = 17
+dht = DHT(DHTPin)
+
+BUZZER_PIN = 27
+LED_PIN = 13
+SERVO_PIN = 24
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
+GPIO.setup(LED_PIN, GPIO.OUT)
+GPIO.setup(SERVO_PIN, GPIO.OUT)
+GPIO.output(BUZZER_PIN, GPIO.LOW)
+GPIO.output(LED_PIN, GPIO.LOW)
+servo = GPIO.PWM(SERVO_PIN, 50)
+servo.start(0)
+
+# === Fonctions matérielles ===
+def set_servo_angle(angle):
+    duty = angle / 18 + 2
+    GPIO.output(SERVO_PIN, True)
+    servo.ChangeDutyCycle(duty)
+    time.sleep(0.5)
+    GPIO.output(SERVO_PIN, False)
+    servo.ChangeDutyCycle(0)
+
+def open_door():
+    set_servo_angle(90)
+    door_status.config(text="État de la trappe : Ouvert")
+    print("Trappe ouverte.")
+
+def close_door():
+    set_servo_angle(0)
+    door_status.config(text="État de la trappe : Fermé")
+    print("Trappe fermée.")
+
+# === Gestion du mode test ===
+def sync_test_mode(event):
+    global test_mode_active
+    new_mode = event.data
+    if new_mode is not None and new_mode != test_mode_active:
+        test_mode_active = new_mode
+        window.after(0, update_test_mode_ui)
+
+def update_test_mode_ui():
+    mode = "Activé" if test_mode_active else "Désactivé"
+    btn_state = tk.NORMAL if test_mode_active else tk.DISABLED
+    test_mode.config(text=f"Mode test : {mode}")
+    for btn in [plus_btn, minus_btn, open_btn, close_btn, start_btn, end_btn]:
+        btn.configure(state=btn_state)
+    print(f"Mode test synchronisé : {mode}")
+
+# === Logique métier ===
+def control_alarm():
+    global alarm_active
+    while True:
+        if not manual_alarm_override and not test_mode_active:
+            if temp_value >= 27.0 and not alarm_active:
+                activate_alarm(True)
+            elif temp_value < 27.0 and alarm_active:
+                activate_alarm(False)
+        time.sleep(1)
+
+def activate_alarm(activate: bool):
+    global alarm_active
+    alarm_active = activate
+    GPIO.output(BUZZER_PIN, GPIO.HIGH if activate else GPIO.LOW)
+    GPIO.output(LED_PIN, GPIO.HIGH if activate else GPIO.LOW)
+    (open_door if activate else close_door)()
+    print(f"Alarme {'activée' if activate else 'désactivée'}!")
+
+def control_alarm_manual(activate: bool):
+    global manual_alarm_override
+    manual_alarm_override = activate
+    activate_alarm(activate)
+
+def change_mode():
+    global test_mode_active
+    test_mode_active = not test_mode_active
+    db.reference('testMode/enabled').set(test_mode_active)
+    print(f"Mode test {'activé' if test_mode_active else 'désactivé'}")
+
+def update_display():
+    temp_value_label.config(text=f"{temp_value:.1f} °C   (H: {current_humidity:.1f}%)")
+
+def plus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value += 1.0
+        update_display()
+
+def minus_temp():
+    global temp_value
+    if test_mode_active:
+        temp_value -= 1.0
+        update_display()
+
+# === Threads critiques ===
+def read_temp_loop():
+    def loop():
+        global temp_value, current_humidity
+        next_run = time.time()
+        
+        while True:
+            if time.time() >= next_run and not test_mode_active:
+                for _ in range(15):
+                    chk = dht.readDHT11()
+                    if chk == 0:
+                        real_temp = dht.getTemperature()
+                        real_humidity = dht.getHumidity()
+                        
+                        try:
+                            with mysql_db.cursor() as cursor:
+                                cursor.execute("INSERT INTO sensor_data (temperature, humidity) VALUES (?, ?)", 
+                                              (real_temp, real_humidity))
+                            
+                            db.reference('donnees').push({
+                                'temperature': real_temp,
+                                'humidity': real_humidity,
+                                'timestamp': datetime.now().isoformat()
+                            })
+                            
+                            temp_value = real_temp
+                            current_humidity = real_humidity
+                            window.after(0, update_display)
+                            mysql_db.commit()
+                            break
+                        
+                        except Exception as e:
+                            mysql_db.rollback()
+                    
+                    time.sleep(2)
+                next_run = time.time() + 15
+            
+            time.sleep(1)
+    
+    threading.Thread(target=loop, daemon=True).start()
+
+def process_commands_loop():
+    def loop():
+        ref = db.reference('commands')
+        
+        while True:
+            try:
+                cloud_commands = ref.order_by_child('executed').equal_to(False).get() or {}
+                
+                for cmd_id, cmd in cloud_commands.items():
+                    if not is_command_processed(cmd_id):
+                        execute_command(cmd_id, cmd, 'cloud')
+                
+                sync_local_commands()
+                
+            except Exception as e:
+                print(f"Erreur synchronisation: {e}")
+            
+            time.sleep(5)
+    
+    def is_command_processed(cmd_id: str) -> bool:
+        with mysql_db.cursor() as cursor:
+            cursor.execute("SELECT executed FROM commands WHERE id = ? AND source = 'cloud'", (cmd_id,))
+            result = cursor.fetchone()
+            return result[0] if result else False
+    
+    def execute_command(cmd_id: str, cmd: dict, source: str):
+        if not test_mode_active:
+            print("Commande ignorée (mode test désactivé)")
+            return
+        
+        try:
+            action = cmd.get('action', '')
+            {
+                'trap_open': open_door,
+                'trap_close': close_door,
+                'buzzer_on': lambda: control_alarm_manual(True),
+                'buzzer_off': lambda: control_alarm_manual(False)
+            }.get(action, lambda: None)()
+            
+            with mysql_db.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO commands (id, action, executed, source)
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE executed = VALUES(executed)
+                """, (cmd_id, action, True, source))
+                
+            db.reference(f'commands/{cmd_id}').update({'executed': True})
+            mysql_db.commit()
+            
+        except Exception as e:
+            print(f"Erreur exécution commande {cmd_id}: {e}")
+            mysql_db.rollback()
+    
+    def sync_local_commands():
+        with mysql_db.cursor() as cursor:
+            cursor.execute("SELECT id, action FROM commands WHERE source = 'local' AND executed = FALSE")
+            local_commands = cursor.fetchall()
+            
+            for cmd_id, action in local_commands:
+                try:
+                    db.reference(f'commands/{cmd_id}').set({'action': action, 'executed': False})
+                    cursor.execute("UPDATE commands SET executed = TRUE WHERE id = ?", (cmd_id,))
+                    mysql_db.commit()
+                except Exception as e:
+                    mysql_db.rollback()
+    
+    threading.Thread(target=loop, daemon=True).start()
+
+# === Interface graphique ===
+window = tk.Tk()
+window.geometry('400x450')
+window.title("Système de Surveillance d'Incendie")
+
+# Widgets
+title = tk.Label(window, text="Système de surveillance", font=("Arial", 15, "bold"), pady=10)
+temp_label = tk.Label(window, text="Température:")
+temp_value_label = tk.Label(window, text="0.0", fg="red", font=("Arial", 12))
+door_status = tk.Label(window, text=f"État de la trappe : {door}", pady=10)
+test_mode = tk.Label(window, text=f"Mode test : {'Activé' if test_mode_active else 'Désactivé'}", fg="blue", font=("Arial", 10, "bold"))
+mode_btn = tk.Button(window, text="Basculer mode test", command=change_mode)
+
+# Boutons de contrôle
+control_frame = tk.Frame(window)
+plus_btn = tk.Button(control_frame, text="+", command=plus_temp, bg="lightgreen", state=tk.DISABLED)
+minus_btn = tk.Button(control_frame, text="-", command=minus_temp, bg="red", state=tk.DISABLED)
+open_btn = tk.Button(control_frame, text="Ouvrir", command=open_door, bg="lightgreen", state=tk.DISABLED)
+close_btn = tk.Button(control_frame, text="Fermer", command=close_door, bg="red", state=tk.DISABLED)
+start_btn = tk.Button(control_frame, text="Activer", command=lambda: control_alarm_manual(True), bg="lightgreen", state=tk.DISABLED)
+end_btn = tk.Button(control_frame, text="Arrêter", command=lambda: control_alarm_manual(False), bg="red", state=tk.DISABLED)
+
+# Placement
+title.pack()
+temp_label.pack()
+temp_value_label.pack()
+door_status.pack()
+test_mode.pack()
+mode_btn.pack(pady=10)
+
+control_frame.pack(pady=10)
+plus_btn.grid(row=0, column=0, padx=5)
+minus_btn.grid(row=0, column=1, padx=5)
+open_btn.grid(row=1, column=0, padx=5, pady=5)
+close_btn.grid(row=1, column=1, padx=5, pady=5)
+start_btn.grid(row=2, column=0, padx=5, pady=5)
+end_btn.grid(row=2, column=1, padx=5, pady=5)
+
+# Démarrage
+read_temp_loop()
+threading.Thread(target=control_alarm, daemon=True).start()
+process_commands_loop()
+
+def on_close():
+    print("Nettoyage...")
+    mysql_cursor.close()
+    mysql_db.close()
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+    GPIO.output(LED_PIN, GPIO.LOW)
+    close_door()
+    servo.stop()
+    GPIO.cleanup()
+    window.destroy()
+
+window.protocol("WM_DELETE_WINDOW", on_close)
+window.mainloop()
