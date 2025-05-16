@@ -1,3 +1,4 @@
+pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ source venv/bin/activate
 (venv) pi@raspberrypi:~/Downloads/ilyass-main/PythonProject $ python Window.py
 Connexion MariaDB réussie !
 Exception in thread Thread-1 (_start_listen):
@@ -9,6 +10,8 @@ Traceback (most recent call last):
   File "/home/pi/Downloads/ilyass-main/PythonProject/venv/lib/python3.11/site-packages/firebase_admin/db.py", line 128, in _start_listen
     self._callback(Event(sse_event))
   File "/home/pi/Downloads/ilyass-main/PythonProject/Window.py", line 98, in sync_test_mode
-    new_mode = snapshot.val()
-               ^^^^^^^^^^^^
-AttributeError: 'Event' object has no attribute 'val'
+    new_mode = event.data.val()
+               ^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'val'
+Trappe ouverte.
+Alarme activée!
